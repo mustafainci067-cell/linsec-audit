@@ -63,6 +63,7 @@ type Finding struct {
 type Config struct {
 	RootDir   string
 	SUIDPaths []string
+	DeepScan  bool
 }
 
 // Root returns the configured root directory, defaulting to "/".

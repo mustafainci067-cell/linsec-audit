@@ -62,6 +62,7 @@ func runScan(args []string, stdout, stderr io.Writer) int {
 		rootFlag       string
 		ignoreFlag     string
 		ignoreFileFlag string
+		deepScanFlag   bool
 		noColorFlag    bool
 		timeoutFlag    time.Duration
 	)
@@ -74,6 +75,7 @@ func runScan(args []string, stdout, stderr io.Writer) int {
 	fs.StringVar(&rootFlag, "root", "/", "Root filesystem path to inspect")
 	fs.StringVar(&ignoreFlag, "ignore", "", "Comma-separated rule IDs to waive (e.g. SSH-004,NET-002)")
 	fs.StringVar(&ignoreFileFlag, "ignore-file", "", "Path to rule waiver policy file")
+	fs.BoolVar(&deepScanFlag, "deep-scan", false, "Expand SUID/SGID scan to /home, /var/tmp, /srv, /var/www, and /root")
 	fs.BoolVar(&noColorFlag, "no-color", false, "Disable ANSI color output in terminal format")
 	fs.DurationVar(&timeoutFlag, "timeout", 30*time.Second, "Maximum audit execution timeout")
 
@@ -104,7 +106,10 @@ func runScan(args []string, stdout, stderr io.Writer) int {
 		requestedModules = strings.Split(modulesFlag, ",")
 	}
 
-	cfg := checks.Config{RootDir: rootFlag}
+	cfg := checks.Config{
+		RootDir:  rootFlag,
+		DeepScan: deepScanFlag,
+	}
 	runner := engine.NewRunner(
 		cfg,
 		checks.NewSSHChecker(cfg),
@@ -218,5 +223,6 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --root string        Target root filesystem path (default \"/\")")
 	fmt.Fprintln(w, "  --ignore string      Comma-separated rule IDs to waive")
 	fmt.Fprintln(w, "  --ignore-file string Path to rule waiver policy file")
+	fmt.Fprintln(w, "  --deep-scan          Expand SUID/SGID scan to /home, /var/tmp, /srv, /var/www, /root")
 	fmt.Fprintln(w, "  --no-color           Disable ANSI colors in terminal output")
 }

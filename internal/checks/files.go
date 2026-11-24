@@ -16,6 +16,7 @@ type fileMeta struct {
 	mode      fs.FileMode
 	uid       uint32
 	isRegular bool
+	isDir     bool
 }
 
 type fileOps interface {
@@ -170,7 +171,7 @@ func (f *FilesChecker) Run(ctx context.Context) ([]Finding, error) {
 		return nil, err
 	}
 
-	findings := make([]Finding, 0, len(filePermRules)+1)
+	findings := make([]Finding, 0, len(filePermRules)+2)
 	for _, rule := range filePermRules {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -183,6 +184,7 @@ func (f *FilesChecker) Run(ctx context.Context) ([]Finding, error) {
 		return nil, err
 	}
 	findings = append(findings, suidFinding)
+	findings = append(findings, f.checkWorldWritableDirs())
 
 	return findings, nil
 }
@@ -242,7 +244,10 @@ func (f *FilesChecker) checkPermissionRule(rule permRule) Finding {
 func (f *FilesChecker) checkSUIDBinaries(ctx context.Context) (Finding, error) {
 	dirs := f.cfg.SUIDPaths
 	if len(dirs) == 0 {
-		dirs = defaultSUIDDirs
+		dirs = append([]string(nil), defaultSUIDDirs...)
+		if f.cfg.DeepScan {
+			dirs = append(dirs, "var/tmp", "home", "root", "srv", "var/www")
+		}
 	}
 
 	riskySet := make(map[string]bool)
@@ -306,15 +311,52 @@ func (f *FilesChecker) checkSUIDBinaries(ctx context.Context) (Finding, error) {
 	}, nil
 }
 
+func (f *FilesChecker) checkWorldWritableDirs() Finding {
+	targets := []string{"tmp", "var/tmp", "dev/shm"}
+	var offending []string
+
+	for _, rel := range targets {
+		meta, exists, err := f.ops.stat(rel)
+		if err != nil || !exists || !meta.isDir {
+			continue
+		}
+		if meta.mode.Perm()&0o002 != 0 && meta.mode&fs.ModeSticky == 0 {
+			offending = append(offending, "/"+rel)
+		}
+	}
+	sort.Strings(offending)
+
+	passed := len(offending) == 0
+	actual := "all checked world-writable directories have sticky bit set"
+	remediation := "No action required"
+	if !passed {
+		actual = fmt.Sprintf("missing sticky bit on world-writable dirs: %s", strings.Join(offending, ", "))
+		remediation = "chmod +t " + strings.Join(offending, " ")
+	}
+
+	return Finding{
+		ID:          "FIL-006",
+		Module:      f.Name(),
+		Title:       "Set sticky bit on all world-writable directories",
+		Description: "World-writable directories without the sticky bit allow unprivileged users to delete or rename files owned by others.",
+		CISRef:      "CIS 1.1.21",
+		Severity:    SeverityMedium,
+		Passed:      passed,
+		Actual:      actual,
+		Expected:    "sticky bit (+t) on /tmp, /var/tmp, /dev/shm",
+		Remediation: remediation,
+	}
+}
+
 func isRiskySpecialBinary(absPath string) bool {
 	base := path.Base(absPath)
 	if dangerousGTFOBins[base] {
 		return true
 	}
-	if strings.HasPrefix(absPath, "/tmp/") ||
-		strings.HasPrefix(absPath, "/opt/") ||
-		strings.HasPrefix(absPath, "/usr/local/") {
-		return true
+	for _, prefix := range []string{"/tmp/", "/opt/", "/usr/local/", "/var/", "/home/", "/root/", "/srv/"} {
+		if strings.HasPrefix(absPath, prefix) {
+			return true
+		}
 	}
 	if !allowedSUIDNames[base] {
 		// Allow standard system paths only if binary is in the vetted allowlist.
@@ -342,6 +384,7 @@ func (o osFileOps) stat(rel string) (fileMeta, bool, error) {
 		mode:      info.Mode(),
 		uid:       uid,
 		isRegular: info.Mode().IsRegular(),
+		isDir:     info.IsDir(),
 	}, true, nil
 }
 
@@ -384,6 +427,7 @@ func (o osFileOps) walk(rel string, fn func(relPath string, meta fileMeta) error
 			mode:      fi.Mode(),
 			uid:       uid,
 			isRegular: fi.Mode().IsRegular(),
+			isDir:     fi.IsDir(),
 		})
 	})
 }
@@ -407,6 +451,7 @@ func (f fsFileOps) stat(rel string) (fileMeta, bool, error) {
 		mode:      info.Mode(),
 		uid:       f.uidMap[clean],
 		isRegular: info.Mode().IsRegular(),
+		isDir:     info.IsDir(),
 	}, true, nil
 }
 
@@ -430,6 +475,7 @@ func (f fsFileOps) walk(rel string, fn func(relPath string, meta fileMeta) error
 			mode:      fi.Mode(),
 			uid:       f.uidMap[p],
 			isRegular: fi.Mode().IsRegular(),
+			isDir:     fi.IsDir(),
 		})
 	})
 }

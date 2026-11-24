@@ -24,8 +24,8 @@ func TestFilesCheckerHardenedFS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
-	if len(findings) != 5 {
-		t.Fatalf("expected 5 findings, got %d", len(findings))
+	if len(findings) != 6 {
+		t.Fatalf("expected 6 findings, got %d", len(findings))
 	}
 	for _, f := range findings {
 		if !f.Passed {
@@ -91,5 +91,43 @@ func TestFilesCheckerNonRootOwnership(t *testing.T) {
 	}
 	if !fm["FIL-002"].Passed {
 		t.Errorf("expected FIL-002 to pass when /etc/passwd has 0644 and uid 0")
+	}
+}
+
+func TestFilesCheckerDeepScanAndStickyBit(t *testing.T) {
+	fsys := fstest.MapFS{
+		"etc/shadow":              {Mode: 0o640, Data: []byte("x")},
+		"etc/passwd":              {Mode: 0o644, Data: []byte("x")},
+		"tmp":                     {Mode: fs.ModeDir | fs.ModeSticky | 0o777},
+		"var/tmp":                 {Mode: fs.ModeDir | 0o777},
+		"home/dev/.local/bin/shx": {Mode: 0o755 | fs.ModeSetuid, Data: []byte("elf")},
+	}
+
+	// Standard scan does not traverse /home
+	shallow := NewFilesCheckerWithFS(Config{DeepScan: false}, fsys, nil)
+	shallowFindings, err := shallow.Run(context.Background())
+	if err != nil {
+		t.Fatalf("shallow Run failed: %v", err)
+	}
+	sfm := findingMap(shallowFindings)
+	if !sfm["FIL-005"].Passed {
+		t.Errorf("shallow scan should not walk /home, got %q", sfm["FIL-005"].Actual)
+	}
+	if sfm["FIL-006"].Passed || !strings.Contains(sfm["FIL-006"].Actual, "/var/tmp") {
+		t.Errorf("expected FIL-006 to flag /var/tmp without sticky bit, got %+v", sfm["FIL-006"])
+	}
+	if strings.Contains(sfm["FIL-006"].Actual, "/tmp,") || sfm["FIL-006"].Remediation != "chmod +t /var/tmp" {
+		t.Errorf("unexpected FIL-006 output: actual=%q fix=%q", sfm["FIL-006"].Actual, sfm["FIL-006"].Remediation)
+	}
+
+	// Deep scan catches SUID inside /home
+	deep := NewFilesCheckerWithFS(Config{DeepScan: true}, fsys, nil)
+	deepFindings, err := deep.Run(context.Background())
+	if err != nil {
+		t.Fatalf("deep Run failed: %v", err)
+	}
+	dfm := findingMap(deepFindings)
+	if dfm["FIL-005"].Passed || !strings.Contains(dfm["FIL-005"].Actual, "/home/dev/.local/bin/shx") {
+		t.Errorf("deep scan should flag /home/dev/.local/bin/shx, got %+v", dfm["FIL-005"])
 	}
 }
