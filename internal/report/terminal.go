@@ -47,10 +47,11 @@ func WriteTerminal(w io.Writer, res engine.AuditResult, noColor bool) error {
 		c(ansiBold+scoreColor, res.Summary.Grade),
 		c(ansiBold+scoreColor, res.Summary.RiskLevel),
 	)
-	fmt.Fprintf(&b, "Checks Summary  : %d total | %s | %s | Penalty: -%d\n",
+	fmt.Fprintf(&b, "Checks Summary  : %d total | %s | %s | %s | Penalty: -%d\n",
 		res.Summary.TotalChecks,
 		c(ansiGreen, fmt.Sprintf("%d passed", res.Summary.PassedChecks)),
 		c(ansiRed, fmt.Sprintf("%d failed", res.Summary.FailedChecks)),
+		c(ansiDim, fmt.Sprintf("%d skipped", res.Summary.SkippedChecks)),
 		res.Summary.TotalPenalty,
 	)
 	fmt.Fprintf(&b, "Failed Severity : %s %d  |  %s %d  |  %s %d  |  %s %d\n",
@@ -61,24 +62,26 @@ func WriteTerminal(w io.Writer, res engine.AuditResult, noColor bool) error {
 	)
 
 	b.WriteString("\n" + c(ansiBold, "Module Breakdown") + "\n")
-	b.WriteString(fmt.Sprintf("%-12s %-8s %-8s %-10s %s\n", "MODULE", "PASSED", "FAILED", "DURATION", "STATUS"))
-	b.WriteString(strings.Repeat("-", 56) + "\n")
+	b.WriteString(fmt.Sprintf("%-12s %-8s %-8s %-8s %-10s %s\n", "MODULE", "PASSED", "FAILED", "SKIPPED", "DURATION", "STATUS"))
+	b.WriteString(strings.Repeat("-", 64) + "\n")
 	for _, m := range res.Modules {
 		status := c(ansiGreen, "PASS")
 		if m.Error != "" {
 			status = c(ansiRed, "ERROR: "+m.Error)
 		} else if m.FailedCount > 0 {
 			status = c(ansiYellow, "FINDINGS")
+		} else if m.SkippedCount > 0 && m.PassedCount == 0 {
+			status = c(ansiDim, "SKIPPED")
 		}
-		fmt.Fprintf(&b, "%-12s %-8d %-8d %-10s %s\n",
-			m.Name, m.PassedCount, m.FailedCount, fmt.Sprintf("%dms", m.DurationMs), status)
+		fmt.Fprintf(&b, "%-12s %-8d %-8d %-8d %-10s %s\n",
+			m.Name, m.PassedCount, m.FailedCount, m.SkippedCount, fmt.Sprintf("%dms", m.DurationMs), status)
 	}
 
 	b.WriteString("\n" + c(ansiBold, "Failed Findings & Remediation") + "\n")
 	b.WriteString(strings.Repeat("-", 72) + "\n")
 	failedCount := 0
 	for _, f := range res.Findings {
-		if f.Passed {
+		if f.Passed || f.Skipped {
 			continue
 		}
 		failedCount++

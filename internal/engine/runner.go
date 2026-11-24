@@ -15,13 +15,14 @@ import (
 
 // ModuleReport captures the execution outcome and findings for a single module.
 type ModuleReport struct {
-	Name        string           `json:"name"`
-	Description string           `json:"description"`
-	DurationMs  int64            `json:"duration_ms"`
-	PassedCount int              `json:"passed_count"`
-	FailedCount int              `json:"failed_count"`
-	Error       string           `json:"error,omitempty"`
-	Findings    []checks.Finding `json:"findings"`
+	Name         string           `json:"name"`
+	Description  string           `json:"description"`
+	DurationMs   int64            `json:"duration_ms"`
+	PassedCount  int              `json:"passed_count"`
+	FailedCount  int              `json:"failed_count"`
+	SkippedCount int              `json:"skipped_count"`
+	Error        string           `json:"error,omitempty"`
+	Findings     []checks.Finding `json:"findings"`
 }
 
 // AuditResult aggregates the full hardening audit report across all modules.
@@ -145,9 +146,12 @@ func (r *Runner) Run(ctx context.Context, moduleNames ...string) (AuditResult, e
 					if findings[i].Module == "" {
 						findings[i].Module = c.Name()
 					}
-					if findings[i].Passed {
+					switch {
+					case findings[i].Skipped:
+						rep.SkippedCount++
+					case findings[i].Passed:
 						rep.PassedCount++
-					} else {
+					default:
 						rep.FailedCount++
 					}
 				}
@@ -195,8 +199,10 @@ func safeRun(ctx context.Context, c checks.Checker) (findings []checks.Finding, 
 
 func sortFindings(findings []checks.Finding) {
 	sort.Slice(findings, func(i, j int) bool {
-		if findings[i].Passed != findings[j].Passed {
-			return !findings[i].Passed
+		gi := findingStatusOrder(findings[i])
+		gj := findingStatusOrder(findings[j])
+		if gi != gj {
+			return gi < gj
 		}
 		ri := checks.SeverityRank(findings[i].Severity)
 		rj := checks.SeverityRank(findings[j].Severity)
@@ -205,4 +211,14 @@ func sortFindings(findings []checks.Finding) {
 		}
 		return findings[i].ID < findings[j].ID
 	})
+}
+
+func findingStatusOrder(f checks.Finding) int {
+	if f.Skipped {
+		return 1
+	}
+	if f.Passed {
+		return 2
+	}
+	return 0
 }

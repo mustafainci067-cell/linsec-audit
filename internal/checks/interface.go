@@ -2,7 +2,9 @@ package checks
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Severity represents the security impact level of a hardening finding.
@@ -50,6 +52,8 @@ type Finding struct {
 	CISRef      string   `json:"cis_ref"`
 	Severity    Severity `json:"severity"`
 	Passed      bool     `json:"passed"`
+	Skipped     bool     `json:"skipped,omitempty"`
+	SkipReason  string   `json:"skip_reason,omitempty"`
 	Actual      string   `json:"actual"`
 	Expected    string   `json:"expected"`
 	Remediation string   `json:"remediation"`
@@ -75,6 +79,26 @@ func (c Config) Path(elem ...string) string {
 	parts = append(parts, c.Root())
 	parts = append(parts, elem...)
 	return filepath.Join(parts...)
+}
+
+// IsContainer reports whether the target root appears to run inside Docker, Podman, Kubernetes, or LXC.
+func (c Config) IsContainer() bool {
+	if _, err := os.Stat(c.Path(".dockerenv")); err == nil {
+		return true
+	}
+	if _, err := os.Stat(c.Path("run", ".containerenv")); err == nil {
+		return true
+	}
+	data, err := os.ReadFile(c.Path("proc", "1", "cgroup"))
+	if err == nil {
+		lower := strings.ToLower(string(data))
+		for _, marker := range []string{"docker", "containerd", "kubepods", "lxc"} {
+			if strings.Contains(lower, marker) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Checker defines a pluggable security audit module.

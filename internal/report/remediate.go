@@ -27,7 +27,7 @@ func WriteRemediation(w io.Writer, res engine.AuditResult) error {
 
 	failed := 0
 	for _, f := range res.Findings {
-		if !f.Passed && strings.TrimSpace(f.Remediation) != "" {
+		if !f.Passed && !f.Skipped && strings.TrimSpace(f.Remediation) != "" {
 			failed++
 		}
 	}
@@ -51,7 +51,7 @@ func WriteRemediation(w io.Writer, res engine.AuditResult) error {
 	b.WriteString("WARNED=0\n\n")
 
 	for _, f := range res.Findings {
-		if f.Passed || strings.TrimSpace(f.Remediation) == "" {
+		if f.Passed || f.Skipped || strings.TrimSpace(f.Remediation) == "" {
 			continue
 		}
 		fmt.Fprintf(&b, "# [%s] (%s | %s) %s\n", f.ID, f.Severity, f.CISRef, f.Title)

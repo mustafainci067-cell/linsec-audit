@@ -6,14 +6,15 @@ const baseScore = 100
 
 // ScoreSummary summarizes the weighted hardening score and severity counts.
 type ScoreSummary struct {
-	Score        int                     `json:"score"`
-	Grade        string                  `json:"grade"`
-	RiskLevel    string                  `json:"risk_level"`
-	TotalChecks  int                     `json:"total_checks"`
-	PassedChecks int                     `json:"passed_checks"`
-	FailedChecks int                     `json:"failed_checks"`
-	TotalPenalty int                     `json:"total_penalty"`
-	BySeverity   map[checks.Severity]int `json:"failed_by_severity"`
+	Score         int                     `json:"score"`
+	Grade         string                  `json:"grade"`
+	RiskLevel     string                  `json:"risk_level"`
+	TotalChecks   int                     `json:"total_checks"`
+	PassedChecks  int                     `json:"passed_checks"`
+	FailedChecks  int                     `json:"failed_checks"`
+	SkippedChecks int                     `json:"skipped_checks"`
+	TotalPenalty  int                     `json:"total_penalty"`
+	BySeverity    map[checks.Severity]int `json:"failed_by_severity"`
 }
 
 // PenaltyFor returns the point deduction for a failed finding of severity s.
@@ -46,6 +47,10 @@ func ComputeScore(findings []checks.Finding) ScoreSummary {
 
 	for _, f := range findings {
 		summary.TotalChecks++
+		if f.Skipped {
+			summary.SkippedChecks++
+			continue
+		}
 		if f.Passed {
 			summary.PassedChecks++
 			continue

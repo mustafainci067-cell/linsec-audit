@@ -120,6 +120,7 @@ func (k *KernelChecker) Run(ctx context.Context) ([]Finding, error) {
 		return nil, err
 	}
 
+	inContainer := k.cfg.IsContainer()
 	var fallback map[string]string
 	findings := make([]Finding, 0, len(kernelRules))
 
@@ -142,12 +143,27 @@ func (k *KernelChecker) Run(ctx context.Context) ([]Finding, error) {
 
 		actual := "unavailable"
 		passed := false
+		skipped := false
+		skipReason := ""
 		if ok {
 			actual = val
 			if source != "proc" {
 				actual = fmt.Sprintf("%s (via %s)", val, source)
 			}
 			passed = matchesAny(val, rule.allowed)
+		}
+
+		if !passed && inContainer {
+			if fallback == nil {
+				fallback = k.loadSysctlConfs()
+			}
+			if fbVal, fbOK := fallback[rule.key]; fbOK && matchesAny(fbVal, rule.allowed) {
+				passed = true
+				actual = fmt.Sprintf("%s (configured in sysctl.d; container procfs read-only)", fbVal)
+			} else {
+				skipped = true
+				skipReason = "container runtime: kernel parameter managed by host"
+			}
 		}
 
 		findings = append(findings, Finding{
@@ -158,6 +174,8 @@ func (k *KernelChecker) Run(ctx context.Context) ([]Finding, error) {
 			CISRef:      rule.cisRef,
 			Severity:    rule.severity,
 			Passed:      passed,
+			Skipped:     skipped,
+			SkipReason:  skipReason,
 			Actual:      actual,
 			Expected:    rule.expected,
 			Remediation: fmt.Sprintf("sysctl -w %s=%s 2>/dev/null || true; echo '%s = %s' > %s", rule.key, rule.fixValue, rule.key, rule.fixValue, rule.confFile),

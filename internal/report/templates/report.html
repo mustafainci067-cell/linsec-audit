@@ -68,6 +68,7 @@
     .sev-LOW { background: rgba(56,189,248,0.16); color: var(--cyan); border: 1px solid rgba(56,189,248,0.35); }
     .status-PASS { background: rgba(34,197,94,0.16); color: #4ade80; border: 1px solid rgba(34,197,94,0.35); }
     .status-FAIL { background: rgba(239,68,68,0.18); color: #f87171; border: 1px solid rgba(239,68,68,0.4); }
+    .status-SKIP { background: rgba(148,163,184,0.16); color: #cbd5e1; border: 1px solid rgba(148,163,184,0.35); }
     table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.9rem; }
     th, td { text-align: left; padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border); }
     th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
@@ -133,6 +134,7 @@
         <div class="sev-row"><span>Total Audited</span><strong>{{.Summary.TotalChecks}}</strong></div>
         <div class="sev-row"><span style="color:#4ade80">Passed</span><strong>{{.Summary.PassedChecks}}</strong></div>
         <div class="sev-row"><span style="color:#f87171">Failed</span><strong>{{.Summary.FailedChecks}}</strong></div>
+        <div class="sev-row"><span style="color:#94a3b8">Skipped</span><strong>{{.Summary.SkippedChecks}}</strong></div>
         <div class="sev-row"><span>Total Penalty</span><strong>-{{.Summary.TotalPenalty}} pts</strong></div>
       </div>
 
@@ -149,7 +151,7 @@
       <div class="subtitle" style="margin-bottom:0.5rem;">Module Breakdown</div>
       <table>
         <thead>
-          <tr><th>Module</th><th>Passed</th><th>Failed</th><th>Duration</th><th>Description</th></tr>
+          <tr><th>Module</th><th>Passed</th><th>Failed</th><th>Skipped</th><th>Duration</th><th>Description</th></tr>
         </thead>
         <tbody>
           {{range .Modules}}
@@ -157,6 +159,7 @@
             <td><strong>{{.Name}}</strong></td>
             <td style="color:#4ade80">{{.PassedCount}}</td>
             <td style="color:#f87171">{{.FailedCount}}</td>
+            <td style="color:#94a3b8">{{.SkippedCount}}</td>
             <td>{{.DurationMs}}ms</td>
             <td style="color:var(--muted)">{{.Description}}</td>
           </tr>
@@ -168,23 +171,24 @@
     <div class="controls">
       <button class="btn active" onclick="setFilter('all', this)">All ({{.Summary.TotalChecks}})</button>
       <button class="btn" onclick="setFilter('fail', this)">Failed ({{.Summary.FailedChecks}})</button>
+      <button class="btn" onclick="setFilter('skip', this)">Skipped ({{.Summary.SkippedChecks}})</button>
       <button class="btn" onclick="setFilter('pass', this)">Passed ({{.Summary.PassedChecks}})</button>
       <input id="searchBox" class="search" type="search" placeholder="Filter by rule ID, module, or title..." oninput="applyFilters()" />
     </div>
 
     <div id="findingsList">
       {{range .Findings}}
-      <div class="finding" data-status="{{if .Passed}}pass{{else}}fail{{end}}" data-text="{{.ID}} {{.Module}} {{.Severity}} {{.CISRef}} {{.Title}}">
+      <div class="finding" data-status="{{if .Skipped}}skip{{else if .Passed}}pass{{else}}fail{{end}}" data-text="{{.ID}} {{.Module}} {{.Severity}} {{.CISRef}} {{.Title}}">
         <div class="finding-head">
           <span class="finding-id">{{.ID}}</span>
           <span class="badge sev-{{.Severity}}">{{.Severity}}</span>
-          <span class="badge {{if .Passed}}status-PASS{{else}}status-FAIL{{end}}">{{if .Passed}}PASS{{else}}FAIL{{end}}</span>
+          <span class="badge {{if .Skipped}}status-SKIP{{else if .Passed}}status-PASS{{else}}status-FAIL{{end}}">{{if .Skipped}}SKIP{{else if .Passed}}PASS{{else}}FAIL{{end}}</span>
           <span class="pill">{{.Module}} &middot; {{.CISRef}}</span>
           <span class="finding-title">{{.Title}}</span>
         </div>
         <p class="finding-desc">{{.Description}}</p>
-        <div class="kv"><strong>Actual:</strong> {{.Actual}} &nbsp;|&nbsp; <strong>Expected:</strong> {{.Expected}}</div>
-        {{if not .Passed}}
+        <div class="kv"><strong>Actual:</strong> {{.Actual}} &nbsp;|&nbsp; <strong>Expected:</strong> {{.Expected}}{{if .Skipped}} &nbsp;|&nbsp; <strong>Reason:</strong> {{.SkipReason}}{{end}}</div>
+        {{if and (not .Passed) (not .Skipped)}}
         <pre class="cmd">{{.Remediation}}</pre>
         {{end}}
       </div>

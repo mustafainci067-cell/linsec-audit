@@ -91,3 +91,29 @@ kernel.kptr_restrict = 2
 		t.Errorf("KRN-006 should pass with kptr_restrict=2, got %q", fm["KRN-006"].Actual)
 	}
 }
+
+func TestKernelCheckerContainerAwareness(t *testing.T) {
+	root := t.TempDir()
+	writeTempFile(t, root, ".dockerenv", "")
+	writeTempFile(t, root, "proc/sys/kernel/randomize_va_space", "2\n")
+	writeTempFile(t, root, "proc/sys/net/ipv4/ip_forward", "1\n")
+	writeTempFile(t, root, "proc/sys/net/ipv4/conf/all/send_redirects", "1\n")
+	writeTempFile(t, root, "etc/sysctl.d/99-linsec-icmp-send.conf", "net.ipv4.conf.all.send_redirects = 0\n")
+
+	checker := NewKernelChecker(Config{RootDir: root})
+	findings, err := checker.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	fm := findingMap(findings)
+
+	if !fm["KRN-001"].Passed || fm["KRN-001"].Skipped {
+		t.Errorf("KRN-001 should pass in container, got %+v", fm["KRN-001"])
+	}
+	if !fm["KRN-003"].Skipped || fm["KRN-003"].Passed {
+		t.Errorf("KRN-003 should be skipped in container when unconfigured, got %+v", fm["KRN-003"])
+	}
+	if !fm["KRN-005"].Passed || fm["KRN-005"].Skipped {
+		t.Errorf("KRN-005 should pass via sysctl.d persistence in container, got %+v", fm["KRN-005"])
+	}
+}

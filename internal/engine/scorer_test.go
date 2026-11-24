@@ -136,3 +136,18 @@ func TestComputeScore(t *testing.T) {
 		})
 	}
 }
+
+func TestComputeScoreSkippedFindings(t *testing.T) {
+	findings := []checks.Finding{
+		{ID: "KRN-001", Severity: checks.SeverityCritical, Passed: true},
+		{ID: "KRN-003", Severity: checks.SeverityHigh, Passed: false, Skipped: true, SkipReason: "container"},
+		{ID: "SSH-003", Severity: checks.SeverityMedium, Passed: false},
+	}
+	got := ComputeScore(findings)
+	if got.Score != 95 {
+		t.Errorf("Score = %d, want 95 (skipped finding must not deduct points)", got.Score)
+	}
+	if got.PassedChecks != 1 || got.FailedChecks != 1 || got.SkippedChecks != 1 {
+		t.Errorf("counts = %d/%d/%d, want 1/1/1", got.PassedChecks, got.FailedChecks, got.SkippedChecks)
+	}
+}
