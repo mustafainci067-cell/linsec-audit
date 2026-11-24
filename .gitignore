@@ -1,0 +1,31 @@
+# Binaries and build outputs
+/bin/
+/linsec-audit
+/linsec-audit.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test & coverage artifacts
+*.test
+*.out
+coverage.html
+
+# Generated audit outputs (root-anchored so template files are never ignored)
+/remediate.sh
+/report.html
+/report.json
+
+# Go workspace / vendor
+go.work
+go.work.sum
+
+# Editor & OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
