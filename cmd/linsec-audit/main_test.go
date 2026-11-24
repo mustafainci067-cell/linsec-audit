@@ -202,3 +202,26 @@ PermitEmptyPasswords no
 		t.Errorf("unexpected summary after ignore: %+v", rep.Audit.Summary)
 	}
 }
+
+func TestCLISARIFAndFailUnder(t *testing.T) {
+	vulnRoot := t.TempDir()
+	populateVulnerableRoot(t, vulnRoot)
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"scan",
+		"--root", vulnRoot,
+		"--modules", "ssh",
+		"--format", "sarif",
+		"--fail-under", "90",
+	}, &stdout, &stderr)
+	if code != 3 {
+		t.Fatalf("expected exit 3 when below --fail-under, got %d; stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"version": "2.1.0"`) {
+		t.Errorf("expected SARIF 2.1.0 output even when --fail-under triggers")
+	}
+	if !strings.Contains(stderr.String(), "below --fail-under threshold 90") {
+		t.Errorf("expected threshold message on stderr, got %q", stderr.String())
+	}
+}

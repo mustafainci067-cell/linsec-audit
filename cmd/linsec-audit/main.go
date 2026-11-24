@@ -63,12 +63,13 @@ func runScan(args []string, stdout, stderr io.Writer) int {
 		ignoreFlag     string
 		ignoreFileFlag string
 		deepScanFlag   bool
+		failUnderFlag  int
 		noColorFlag    bool
 		timeoutFlag    time.Duration
 	)
 
 	fs.StringVar(&modulesFlag, "modules", "", "Comma-separated modules to run (ssh,kernel,files,users,network,system)")
-	fs.StringVar(&formatFlag, "format", "term", "Output format: term | json | html")
+	fs.StringVar(&formatFlag, "format", "term", "Output format: term | json | html | sarif")
 	fs.StringVar(&outputFlag, "output", "", "Write report to file path instead of stdout")
 	fs.BoolVar(&genFixFlag, "gen-fix", false, "Generate commented bash remediation script (remediate.sh)")
 	fs.StringVar(&fixOutFlag, "fix-output", "remediate.sh", "Output path for generated remediation script")
@@ -76,6 +77,7 @@ func runScan(args []string, stdout, stderr io.Writer) int {
 	fs.StringVar(&ignoreFlag, "ignore", "", "Comma-separated rule IDs to waive (e.g. SSH-004,NET-002)")
 	fs.StringVar(&ignoreFileFlag, "ignore-file", "", "Path to rule waiver policy file")
 	fs.BoolVar(&deepScanFlag, "deep-scan", false, "Expand SUID/SGID scan to /home, /var/tmp, /srv, /var/www, and /root")
+	fs.IntVar(&failUnderFlag, "fail-under", 0, "Exit with code 3 if hardening score is below this threshold (0-100)")
 	fs.BoolVar(&noColorFlag, "no-color", false, "Disable ANSI color output in terminal format")
 	fs.DurationVar(&timeoutFlag, "timeout", 30*time.Second, "Maximum audit execution timeout")
 
@@ -96,8 +98,12 @@ func runScan(args []string, stdout, stderr io.Writer) int {
 	}
 
 	format := strings.ToLower(strings.TrimSpace(formatFlag))
-	if format != "term" && format != "json" && format != "html" {
-		fmt.Fprintf(stderr, "invalid --format %q (expected term, json, or html)\n", formatFlag)
+	if format != "term" && format != "json" && format != "html" && format != "sarif" {
+		fmt.Fprintf(stderr, "invalid --format %q (expected term, json, html, or sarif)\n", formatFlag)
+		return 2
+	}
+	if failUnderFlag < 0 || failUnderFlag > 100 {
+		fmt.Fprintf(stderr, "invalid --fail-under %d (must be between 0 and 100)\n", failUnderFlag)
 		return 2
 	}
 
@@ -152,6 +158,8 @@ func runScan(args []string, stdout, stderr io.Writer) int {
 		err = report.WriteJSON(&buf, res)
 	case "html":
 		err = report.WriteHTML(&buf, res)
+	case "sarif":
+		err = report.WriteSARIF(&buf, res)
 	}
 	if err != nil {
 		fmt.Fprintf(stderr, "render report error: %v\n", err)
@@ -182,6 +190,11 @@ func runScan(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		fmt.Fprintf(stderr, "Remediation script generated: %s\n", fixOutFlag)
+	}
+
+	if failUnderFlag > 0 && res.Summary.Score < failUnderFlag {
+		fmt.Fprintf(stderr, "score %d/100 is below --fail-under threshold %d\n", res.Summary.Score, failUnderFlag)
+		return 3
 	}
 
 	return 0
@@ -217,7 +230,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Common Flags:")
 	fmt.Fprintln(w, "  --modules string     Comma-separated modules (ssh,kernel,files,users,network,system)")
-	fmt.Fprintln(w, "  --format string      Output format: term | json | html (default \"term\")")
+	fmt.Fprintln(w, "  --format string      Output format: term | json | html | sarif (default \"term\")")
 	fmt.Fprintln(w, "  --output string      Output file path (default stdout)")
 	fmt.Fprintln(w, "  --gen-fix            Generate commented bash remediation script (remediate.sh)")
 	fmt.Fprintln(w, "  --fix-output string  Path for generated remediation script (default \"remediate.sh\")")
@@ -225,5 +238,6 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --ignore string      Comma-separated rule IDs to waive")
 	fmt.Fprintln(w, "  --ignore-file string Path to rule waiver policy file")
 	fmt.Fprintln(w, "  --deep-scan          Expand SUID/SGID scan to /home, /var/tmp, /srv, /var/www, /root")
+	fmt.Fprintln(w, "  --fail-under int     Exit with code 3 if score is below threshold (0-100)")
 	fmt.Fprintln(w, "  --no-color           Disable ANSI colors in terminal output")
 }

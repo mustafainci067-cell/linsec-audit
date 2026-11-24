@@ -128,3 +128,25 @@ func TestWriteRemediation(t *testing.T) {
 		t.Errorf("passing check KRN-001 should not be emitted in remediation script")
 	}
 }
+
+func TestWriteSARIF(t *testing.T) {
+	var buf bytes.Buffer
+	res := sampleAuditResult()
+	if err := WriteSARIF(&buf, res); err != nil {
+		t.Fatalf("WriteSARIF failed: %v", err)
+	}
+	var doc sarifLog
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatalf("invalid SARIF JSON: %v", err)
+	}
+	if doc.Version != "2.1.0" || len(doc.Runs) != 1 {
+		t.Fatalf("unexpected SARIF envelope: %+v", doc)
+	}
+	run := doc.Runs[0]
+	if len(run.Tool.Driver.Rules) != 2 {
+		t.Errorf("expected 2 rules, got %d", len(run.Tool.Driver.Rules))
+	}
+	if len(run.Results) != 1 || run.Results[0].RuleID != "SSH-001" || run.Results[0].Level != "error" {
+		t.Errorf("unexpected SARIF results: %+v", run.Results)
+	}
+}
