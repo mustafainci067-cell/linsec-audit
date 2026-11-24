@@ -164,3 +164,41 @@ func TestCLIVersionAndInvalidArguments(t *testing.T) {
 		t.Errorf("expected exit 1 for unknown module, got %d", code)
 	}
 }
+
+func TestCLIIgnorePolicyAndFlags(t *testing.T) {
+	root := t.TempDir()
+	populateHardenedRoot(t, root)
+	// Introduce two failures: X11Forwarding yes (SSH-004: -5) and MaxAuthTries 8 (SSH-003: -5)
+	writeFixture(t, root, "etc/ssh/sshd_config", `
+PermitRootLogin no
+PasswordAuthentication no
+MaxAuthTries 8
+X11Forwarding yes
+PermitEmptyPasswords no
+`)
+	ignoreFile := filepath.Join(t.TempDir(), ".linsec-ignore")
+	if err := os.WriteFile(ignoreFile, []byte("SSH-004 # Bastion requires X11\n"), 0o600); err != nil {
+		t.Fatalf("write ignore file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"scan",
+		"--root", root,
+		"--modules", "ssh",
+		"--ignore-file", ignoreFile,
+		"--ignore", "SSH-003",
+		"--format", "json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr=%s", code, stderr.String())
+	}
+
+	var rep report.JSONReport
+	if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
+		t.Fatalf("unmarshal json: %v", err)
+	}
+	if rep.Audit.Summary.Score != 100 || rep.Audit.Summary.SkippedChecks != 2 || rep.Audit.Summary.FailedChecks != 0 {
+		t.Errorf("unexpected summary after ignore: %+v", rep.Audit.Summary)
+	}
+}

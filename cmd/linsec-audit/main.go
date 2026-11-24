@@ -54,14 +54,16 @@ func runScan(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 
 	var (
-		modulesFlag string
-		formatFlag  string
-		outputFlag  string
-		genFixFlag  bool
-		fixOutFlag  string
-		rootFlag    string
-		noColorFlag bool
-		timeoutFlag time.Duration
+		modulesFlag    string
+		formatFlag     string
+		outputFlag     string
+		genFixFlag     bool
+		fixOutFlag     string
+		rootFlag       string
+		ignoreFlag     string
+		ignoreFileFlag string
+		noColorFlag    bool
+		timeoutFlag    time.Duration
 	)
 
 	fs.StringVar(&modulesFlag, "modules", "", "Comma-separated modules to run (ssh,kernel,files,users,network)")
@@ -70,6 +72,8 @@ func runScan(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(&genFixFlag, "gen-fix", false, "Generate commented bash remediation script (remediate.sh)")
 	fs.StringVar(&fixOutFlag, "fix-output", "remediate.sh", "Output path for generated remediation script")
 	fs.StringVar(&rootFlag, "root", "/", "Root filesystem path to inspect")
+	fs.StringVar(&ignoreFlag, "ignore", "", "Comma-separated rule IDs to waive (e.g. SSH-004,NET-002)")
+	fs.StringVar(&ignoreFileFlag, "ignore-file", "", "Path to rule waiver policy file")
 	fs.BoolVar(&noColorFlag, "no-color", false, "Disable ANSI color output in terminal format")
 	fs.DurationVar(&timeoutFlag, "timeout", 30*time.Second, "Maximum audit execution timeout")
 
@@ -118,6 +122,20 @@ func runScan(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "audit error: %v\n", err)
 		return 1
 	}
+
+	policy := make(engine.IgnorePolicy)
+	if strings.TrimSpace(ignoreFileFlag) != "" {
+		loaded, loadErr := engine.LoadIgnoreFile(ignoreFileFlag)
+		if loadErr != nil {
+			fmt.Fprintf(stderr, "ignore policy error: %v\n", loadErr)
+			return 2
+		}
+		policy = loaded
+	}
+	if strings.TrimSpace(ignoreFlag) != "" {
+		policy.MergeIDs(strings.Split(ignoreFlag, ","), "waived via --ignore flag")
+	}
+	engine.ApplyIgnorePolicy(&res, policy)
 
 	var buf bytes.Buffer
 	switch format {
@@ -198,5 +216,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --gen-fix            Generate commented bash remediation script (remediate.sh)")
 	fmt.Fprintln(w, "  --fix-output string  Path for generated remediation script (default \"remediate.sh\")")
 	fmt.Fprintln(w, "  --root string        Target root filesystem path (default \"/\")")
+	fmt.Fprintln(w, "  --ignore string      Comma-separated rule IDs to waive")
+	fmt.Fprintln(w, "  --ignore-file string Path to rule waiver policy file")
 	fmt.Fprintln(w, "  --no-color           Disable ANSI colors in terminal output")
 }
