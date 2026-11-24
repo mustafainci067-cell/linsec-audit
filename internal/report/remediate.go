@@ -70,6 +70,7 @@ func WriteRemediation(w io.Writer, res engine.AuditResult) error {
 
 	b.WriteString("# Validate SSH daemon syntax if sshd is available\n")
 	b.WriteString("if command -v sshd >/dev/null 2>&1 && [[ -f /etc/ssh/sshd_config ]]; then\n")
+	b.WriteString("    mkdir -p /run/sshd\n")
 	b.WriteString("    if sshd -t 2>/dev/null; then\n")
 	b.WriteString("        echo \"[OK] sshd -t syntax validation succeeded\"\n")
 	b.WriteString("    else\n")
