@@ -21,6 +21,8 @@ type fileMeta struct {
 
 type fileOps interface {
 	stat(rel string) (fileMeta, bool, error)
+	readFile(rel string) ([]byte, bool, error)
+	readDir(rel string) ([]string, error)
 	walk(rel string, fn func(relPath string, meta fileMeta) error) error
 }
 
@@ -388,6 +390,35 @@ func (o osFileOps) stat(rel string) (fileMeta, bool, error) {
 	}, true, nil
 }
 
+func (o osFileOps) readFile(rel string) ([]byte, bool, error) {
+	full := o.cfg.Path(filepath.FromSlash(rel))
+	data, err := os.ReadFile(full)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return data, true, nil
+}
+
+func (o osFileOps) readDir(rel string) ([]string, error) {
+	full := o.cfg.Path(filepath.FromSlash(rel))
+	entries, err := os.ReadDir(full)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
 func (o osFileOps) walk(rel string, fn func(relPath string, meta fileMeta) error) error {
 	fullDir := o.cfg.Path(filepath.FromSlash(rel))
 	info, err := os.Lstat(fullDir)
@@ -453,6 +484,35 @@ func (f fsFileOps) stat(rel string) (fileMeta, bool, error) {
 		isRegular: info.Mode().IsRegular(),
 		isDir:     info.IsDir(),
 	}, true, nil
+}
+
+func (f fsFileOps) readFile(rel string) ([]byte, bool, error) {
+	clean := strings.TrimPrefix(filepath.ToSlash(rel), "/")
+	data, err := fs.ReadFile(f.fsys, clean)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return data, true, nil
+}
+
+func (f fsFileOps) readDir(rel string) ([]string, error) {
+	clean := strings.TrimPrefix(filepath.ToSlash(rel), "/")
+	entries, err := fs.ReadDir(f.fsys, clean)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 func (f fsFileOps) walk(rel string, fn func(relPath string, meta fileMeta) error) error {

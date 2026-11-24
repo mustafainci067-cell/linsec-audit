@@ -67,7 +67,7 @@ func runScan(args []string, stdout, stderr io.Writer) int {
 		timeoutFlag    time.Duration
 	)
 
-	fs.StringVar(&modulesFlag, "modules", "", "Comma-separated modules to run (ssh,kernel,files,users,network)")
+	fs.StringVar(&modulesFlag, "modules", "", "Comma-separated modules to run (ssh,kernel,files,users,network,system)")
 	fs.StringVar(&formatFlag, "format", "term", "Output format: term | json | html")
 	fs.StringVar(&outputFlag, "output", "", "Write report to file path instead of stdout")
 	fs.BoolVar(&genFixFlag, "gen-fix", false, "Generate commented bash remediation script (remediate.sh)")
@@ -117,6 +117,7 @@ func runScan(args []string, stdout, stderr io.Writer) int {
 		checks.NewFilesChecker(cfg),
 		checks.NewUsersChecker(cfg),
 		checks.NewNetworkChecker(cfg),
+		checks.NewSystemChecker(cfg),
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutFlag)
@@ -215,7 +216,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  linsec-audit version")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Common Flags:")
-	fmt.Fprintln(w, "  --modules string     Comma-separated modules (ssh,kernel,files,users,network)")
+	fmt.Fprintln(w, "  --modules string     Comma-separated modules (ssh,kernel,files,users,network,system)")
 	fmt.Fprintln(w, "  --format string      Output format: term | json | html (default \"term\")")
 	fmt.Fprintln(w, "  --output string      Output file path (default stdout)")
 	fmt.Fprintln(w, "  --gen-fix            Generate commented bash remediation script (remediate.sh)")
