@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>linsec-audit Report - {{.Hostname}}</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --surface: #121931;
+      --surface-2: #182241;
+      --border: #263258;
+      --text: #e6ecf8;
+      --muted: #93a3c7;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --orange: #f97316;
+      --red: #ef4444;
+      --magenta: #ec4899;
+      --cyan: #38bdf8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, sans-serif;
+      background: radial-gradient(circle at top right, #162144 0%, var(--bg) 55%);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 2rem 1.25rem;
+    }
+    .container { max-width: 1120px; margin: 0 auto; }
+    .header {
+      display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+      gap: 1rem; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);
+    }
+    h1 { margin: 0; font-size: 1.65rem; letter-spacing: -0.02em; }
+    .subtitle { color: var(--muted); font-size: 0.9rem; margin-top: 0.25rem; }
+    .meta-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .pill {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+      padding: 0.3rem 0.75rem; font-size: 0.8rem; color: var(--muted);
+    }
+    .grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem; margin-bottom: 1.5rem;
+    }
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 1.15rem 1.25rem;
+    }
+    .score-value { font-size: 2.3rem; font-weight: 700; line-height: 1.1; }
+    .score-good { color: var(--green); }
+    .score-warn { color: var(--yellow); }
+    .score-bad { color: var(--red); }
+    .progress-track {
+      height: 10px; background: var(--surface-2); border-radius: 999px;
+      overflow: hidden; margin: 0.75rem 0 0.5rem;
+    }
+    .progress-fill { height: 100%; border-radius: 999px; }
+    .sev-row { display: flex; justify-content: space-between; font-size: 0.88rem; margin-top: 0.3rem; }
+    .badge {
+      display: inline-block; padding: 0.15rem 0.55rem; border-radius: 6px;
+      font-size: 0.74rem; font-weight: 700; letter-spacing: 0.03em;
+    }
+    .sev-CRITICAL { background: rgba(236,72,153,0.18); color: #f472b6; border: 1px solid rgba(236,72,153,0.4); }
+    .sev-HIGH { background: rgba(239,68,68,0.18); color: #f87171; border: 1px solid rgba(239,68,68,0.4); }
+    .sev-MEDIUM { background: rgba(234,179,8,0.18); color: #facc15; border: 1px solid rgba(234,179,8,0.4); }
+    .sev-LOW { background: rgba(56,189,248,0.16); color: var(--cyan); border: 1px solid rgba(56,189,248,0.35); }
+    .status-PASS { background: rgba(34,197,94,0.16); color: #4ade80; border: 1px solid rgba(34,197,94,0.35); }
+    .status-FAIL { background: rgba(239,68,68,0.18); color: #f87171; border: 1px solid rgba(239,68,68,0.4); }
+    table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+    .controls {
+      display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+      margin: 1.5rem 0 1rem;
+    }
+    .btn {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      padding: 0.4rem 0.85rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem;
+    }
+    .btn.active { background: #223262; border-color: var(--cyan); color: var(--cyan); }
+    .search {
+      margin-left: auto; background: var(--surface); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px; padding: 0.45rem 0.75rem;
+      min-width: 220px;
+    }
+    .finding {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 1rem 1.15rem; margin-bottom: 0.85rem;
+    }
+    .finding-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+    .finding-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--cyan); }
+    .finding-title { font-weight: 600; }
+    .finding-desc { color: var(--muted); font-size: 0.88rem; margin: 0.25rem 0 0.65rem; }
+    .kv { font-size: 0.85rem; margin: 0.2rem 0; }
+    .kv strong { color: var(--muted); }
+    pre.cmd {
+      background: #070b16; border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.65rem 0.8rem; overflow-x: auto; font-size: 0.82rem; color: #bae6fd;
+      margin: 0.5rem 0 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1>linsec-audit Security Hardening Report</h1>
+        <div class="subtitle">CIS Benchmark-aligned Linux configuration &amp; runtime audit</div>
+      </div>
+      <div class="meta-pills">
+        <span class="pill">Host: {{.Hostname}}</span>
+        <span class="pill">Platform: {{.OS}}/{{.Arch}}</span>
+        <span class="pill">Root: {{.TargetRoot}}</span>
+        <span class="pill">Duration: {{.DurationMs}}ms</span>
+        <span class="pill">UTC: {{.TimestampStr}}</span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="subtitle">Hardening Score</div>
+        <div class="score-value {{.ScoreClass}}">{{.Summary.Score}}<span style="font-size:1.1rem;color:var(--muted)">/100</span></div>
+        <div class="progress-track">
+          <div class="progress-fill" style="width:{{.Summary.Score}}%;background:{{.ScoreBarHex}};"></div>
+        </div>
+        <div class="subtitle">Grade <strong>{{.Summary.Grade}}</strong> &middot; Risk: <strong>{{.Summary.RiskLevel}}</strong></div>
+      </div>
+
+      <div class="card">
+        <div class="subtitle">Checks Overview</div>
+        <div class="sev-row"><span>Total Audited</span><strong>{{.Summary.TotalChecks}}</strong></div>
+        <div class="sev-row"><span style="color:#4ade80">Passed</span><strong>{{.Summary.PassedChecks}}</strong></div>
+        <div class="sev-row"><span style="color:#f87171">Failed</span><strong>{{.Summary.FailedChecks}}</strong></div>
+        <div class="sev-row"><span>Total Penalty</span><strong>-{{.Summary.TotalPenalty}} pts</strong></div>
+      </div>
+
+      <div class="card">
+        <div class="subtitle">Failed by Severity</div>
+        <div class="sev-row"><span style="color:#f472b6">CRITICAL (-15)</span><strong>{{.CriticalCount}}</strong></div>
+        <div class="sev-row"><span style="color:#f87171">HIGH (-10)</span><strong>{{.HighCount}}</strong></div>
+        <div class="sev-row"><span style="color:#facc15">MEDIUM (-5)</span><strong>{{.MediumCount}}</strong></div>
+        <div class="sev-row"><span style="color:#38bdf8">LOW (-2)</span><strong>{{.LowCount}}</strong></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="subtitle" style="margin-bottom:0.5rem;">Module Breakdown</div>
+      <table>
+        <thead>
+          <tr><th>Module</th><th>Passed</th><th>Failed</th><th>Duration</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          {{range .Modules}}
+          <tr>
+            <td><strong>{{.Name}}</strong></td>
+            <td style="color:#4ade80">{{.PassedCount}}</td>
+            <td style="color:#f87171">{{.FailedCount}}</td>
+            <td>{{.DurationMs}}ms</td>
+            <td style="color:var(--muted)">{{.Description}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="controls">
+      <button class="btn active" onclick="setFilter('all', this)">All ({{.Summary.TotalChecks}})</button>
+      <button class="btn" onclick="setFilter('fail', this)">Failed ({{.Summary.FailedChecks}})</button>
+      <button class="btn" onclick="setFilter('pass', this)">Passed ({{.Summary.PassedChecks}})</button>
+      <input id="searchBox" class="search" type="search" placeholder="Filter by rule ID, module, or title..." oninput="applyFilters()" />
+    </div>
+
+    <div id="findingsList">
+      {{range .Findings}}
+      <div class="finding" data-status="{{if .Passed}}pass{{else}}fail{{end}}" data-text="{{.ID}} {{.Module}} {{.Severity}} {{.CISRef}} {{.Title}}">
+        <div class="finding-head">
+          <span class="finding-id">{{.ID}}</span>
+          <span class="badge sev-{{.Severity}}">{{.Severity}}</span>
+          <span class="badge {{if .Passed}}status-PASS{{else}}status-FAIL{{end}}">{{if .Passed}}PASS{{else}}FAIL{{end}}</span>
+          <span class="pill">{{.Module}} &middot; {{.CISRef}}</span>
+          <span class="finding-title">{{.Title}}</span>
+        </div>
+        <p class="finding-desc">{{.Description}}</p>
+        <div class="kv"><strong>Actual:</strong> {{.Actual}} &nbsp;|&nbsp; <strong>Expected:</strong> {{.Expected}}</div>
+        {{if not .Passed}}
+        <pre class="cmd">{{.Remediation}}</pre>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+  </div>
+
+  <script>
+    var currentStatus = 'all';
+    function setFilter(status, btn) {
+      currentStatus = status;
+      document.querySelectorAll('.controls .btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      applyFilters();
+    }
+    function applyFilters() {
+      var q = document.getElementById('searchBox').value.toLowerCase();
+      document.querySelectorAll('#findingsList .finding').forEach(function(el) {
+        var st = el.getAttribute('data-status');
+        var txt = el.getAttribute('data-text').toLowerCase();
+        var matchStatus = (currentStatus === 'all') || (st === currentStatus);
+        var matchQuery = (!q) || txt.indexOf(q) !== -1;
+        el.style.display = (matchStatus && matchQuery) ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>
